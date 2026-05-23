@@ -1,19 +1,19 @@
 import streamlit as st
-from PIL import Image
 from datetime import datetime, timedelta
 import google.generativeai as genai
+import requests
 
 # ==========================================
 # PAGE CONFIG
 # ==========================================
 st.set_page_config(
-    page_title="AgroAI Pro",
+    page_title="AgroAI Smart Farmer",
     page_icon="🌱",
     layout="wide"
 )
 
 # ==========================================
-# CUSTOM DESIGN
+# CUSTOM CSS
 # ==========================================
 st.markdown("""
 <style>
@@ -41,31 +41,29 @@ st.markdown("""
     height:3em;
     font-size:16px;
 }
-
-.css-1d391kg {
-    background-color:#111827;
-}
 </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# GEMINI API
+# API KEYS
 # ==========================================
-API_KEY = st.secrets["GEMINI_API_KEY"]
+GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
+WEATHER_API_KEY = st.secrets["WEATHER_API_KEY"]
 
-genai.configure(api_key=API_KEY)
-model = genai.GenerativeModel("models/gemini-2.0-flash")
+genai.configure(api_key=GEMINI_API_KEY)
+
+model = genai.GenerativeModel("gemini-1.5-flash-8b")
 
 # ==========================================
 # HEADER
 # ==========================================
 st.markdown(
-    '<div class="title">🌱 AgroAI Pro</div>',
+    '<div class="title">🌱 AgroAI Smart Farmer</div>',
     unsafe_allow_html=True
 )
 
 st.markdown(
-    '<div class="subtitle">AI Powered Smart Farming Assistant</div>',
+    '<div class="subtitle">AI Farming + Weather + Harvest Prediction</div>',
     unsafe_allow_html=True
 )
 
@@ -81,175 +79,192 @@ with st.sidebar:
         ["English", "Tamil", "Sinhala"]
     )
 
-    crop_type = st.selectbox(
-        "🌾 Crop Type",
-        ["Tomato", "Rice", "Chili", "Onion", "Carrot"]
-    )
-
 # ==========================================
-# IMAGE DETECTION
+# FARM INPUT
 # ==========================================
-st.header("📷 AI Crop Detection")
+st.header("🌾 Crop Information")
 
-uploaded = st.file_uploader(
-    "Upload Fruit or Vegetable Image",
-    type=["jpg", "jpeg", "png"]
+crop = st.selectbox(
+    "Select Crop",
+    [
+        "Tomato",
+        "Rice",
+        "Chili",
+        "Onion",
+        "Carrot",
+        "Cucumber",
+        "Brinjal"
+    ]
 )
 
-if uploaded:
-
-    image = Image.open(uploaded)
-
-    st.image(
-        image,
-        caption="Uploaded Image",
-        use_container_width=True
-    )
-
-    with st.spinner("🔍 AI Analyzing Image..."):
-
-        prompt = f"""
-        Identify this fruit or vegetable.
-
-        Give:
-        1. Name
-        2. Ripeness level
-        3. Health condition
-        4. Estimated harvest days
-
-        Answer in {language}.
-        """
-
-        try:
-
-            response = model.generate_content(
-                [prompt, image]
-            )
-
-            st.success(response.text)
-
-        except Exception as e:
-
-            st.error(f"Error: {e}")
-
-# ==========================================
-# HARVEST REMINDER
-# ==========================================
-st.header("⏰ Harvest Reminder")
-
-days = st.number_input(
-    "Estimated Harvest Days",
-    min_value=1,
-    max_value=365,
-    value=7
+variety = st.text_input(
+    "Enter Variety Name"
 )
 
-if st.button("Create Harvest Reminder"):
+seed_date = st.date_input(
+    "🌱 Seed Planted Date"
+)
 
-    future_date = datetime.now() + timedelta(days=days)
+city = st.text_input(
+    "📍 Enter Your City",
+    "Colombo"
+)
+
+# ==========================================
+# HARVEST CALCULATION
+# ==========================================
+harvest_days = {
+    "Tomato": 90,
+    "Rice": 120,
+    "Chili": 100,
+    "Onion": 110,
+    "Carrot": 80,
+    "Cucumber": 60,
+    "Brinjal": 95
+}
+
+days_needed = harvest_days.get(crop, 90)
+
+harvest_date = seed_date + timedelta(days=days_needed)
+
+remaining_days = (harvest_date - datetime.now().date()).days
+
+# ==========================================
+# WEATHER API
+# ==========================================
+weather_url = f"""
+https://api.openweathermap.org/data/2.5/weather?q={city}&appid={WEATHER_API_KEY}&units=metric
+"""
+
+weather_data = None
+
+try:
+
+    response = requests.get(weather_url)
+
+    weather_data = response.json()
+
+except:
+    pass
+
+# ==========================================
+# SHOW RESULTS
+# ==========================================
+if st.button("🌱 Generate Smart Farming Report"):
+
+    st.success(f"🌾 Crop: {crop}")
+
+    st.info(f"🧬 Variety: {variety}")
 
     st.success(
-        f"🌾 Harvest Date: {future_date.strftime('%d-%m-%Y')}"
+        f"⏰ Estimated Harvest Date: {harvest_date.strftime('%d-%m-%Y')}"
     )
 
-    st.info(
-        f"⏳ Countdown: {days} days remaining"
+    st.warning(
+        f"📅 Days Remaining: {remaining_days}"
     )
 
-# ==========================================
-# WATERING REMINDER
-# ==========================================
-st.header("💧 Smart Watering Reminder")
+    # ======================================
+    # WEATHER
+    # ======================================
+    st.header("🌦️ Weather Information")
 
-rain_level = st.slider(
-    "Rain Level (%)",
-    0,
-    100,
-    30
+    try:
+
+        temp = weather_data["main"]["temp"]
+
+        humidity = weather_data["main"]["humidity"]
+
+        condition = weather_data["weather"][0]["description"]
+
+        st.success(f"🌡️ Temperature: {temp} °C")
+
+        st.info(f"💧 Humidity: {humidity}%")
+
+        st.warning(f"☁️ Condition: {condition}")
+
+        # WATERING ADVICE
+        st.header("💧 AI Watering Advice")
+
+        if "rain" in condition.lower():
+
+            st.success(
+                "🌧️ Rain expected. No watering needed today."
+            )
+
+        else:
+
+            st.warning(
+                "💧 Low rain chance. Water plants tomorrow morning."
+            )
+
+    except:
+
+        st.error("Weather data not available.")
+
+    # ======================================
+    # AI ADVICE
+    # ======================================
+    st.header("🤖 AI Farming Advice")
+
+    prompt = f"""
+    Give farming advice for:
+
+    Crop: {crop}
+    Variety: {variety}
+
+    Include:
+    - Fertilizer advice
+    - Watering tips
+    - Harvest tips
+    - Disease prevention
+
+    Language: {language}
+
+    Keep answers simple for farmers.
+    """
+
+    try:
+
+        ai_response = model.generate_content(prompt)
+
+        st.write(ai_response.text)
+
+    except Exception as e:
+
+        st.error(f"AI Error: {e}")
+
+# ==========================================
+# CHATBOT
+# ==========================================
+st.header("🤖 AgroAI Chatbot")
+
+question = st.text_input(
+    "Ask Farming Questions"
 )
 
-if st.button("Get Watering Advice"):
+if question:
 
-    if rain_level < 40:
+    chatbot_prompt = f"""
+    You are a smart farming assistant.
 
-        st.warning(
-            f"""
-            Low rain expected.
+    Language: {language}
 
-            💧 Water your {crop_type} tomorrow morning.
-            """
-        )
+    Answer simply.
 
-    else:
+    Question:
+    {question}
+    """
 
-        st.success(
-            f"""
-            Enough rain expected.
+    try:
 
-            🌧️ No watering needed today.
-            """
-        )
+        reply = model.generate_content(chatbot_prompt)
 
-# ==========================================
-# AI FARMING CHATBOT
-# ==========================================
-st.header("🤖 AI Farming Chatbot")
+        st.success(reply.text)
 
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+    except Exception as e:
 
-for msg in st.session_state.messages:
-
-    with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
-
-user_input = st.chat_input(
-    "Ask farming questions..."
-)
-
-if user_input:
-
-    st.session_state.messages.append({
-        "role": "user",
-        "content": user_input
-    })
-
-    with st.chat_message("user"):
-        st.markdown(user_input)
-
-    with st.chat_message("assistant"):
-
-        with st.spinner("Thinking..."):
-
-            chatbot_prompt = f"""
-            You are a smart AI farming assistant.
-
-            Answer simply for farmers.
-
-            Language: {language}
-
-            Question:
-            {user_input}
-            """
-
-            try:
-
-                response = model.generate_content(
-                    chatbot_prompt
-                )
-
-                reply = response.text
-
-            except Exception as e:
-
-                reply = f"Error: {e}"
-
-            st.markdown(reply)
-
-    st.session_state.messages.append({
-        "role": "assistant",
-        "content": reply
-    })
+        st.error(f"Error: {e}")
 
 # ==========================================
 # FOOTER
