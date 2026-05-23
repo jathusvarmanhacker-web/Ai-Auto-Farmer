@@ -51,7 +51,7 @@ st.markdown("""
 # ==========================================
 # GEMINI API
 # ==========================================
-API_KEY = st.secrets["AIzaSyDywCoz5V0ham1YLyl-6yIoGGIC5WiCkXA"]
+API_KEY = st.secrets["GEMINI_API_KEY"]
 
 genai.configure(api_key=API_KEY)
 
